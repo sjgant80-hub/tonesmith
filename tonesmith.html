@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ToneSmith — Writing Tone Analyzer</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Sora:wght@300;400;600;800&display=swap');
+
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --surface-2: #1c2129;
+  --border: #21262d;
+  --border-hi: #30363d;
+  --text: #c9d1d9;
+  --text-dim: #6e7681;
+  --text-faint: #3d444d;
+  --ink: #f0f6fc;
+  --accent: #58a6ff;
+  --accent-dim: rgba(88,166,255,0.08);
+  --green: #3fb950;
+  --orange: #d29922;
+  --red: #f85149;
+  --purple: #bc8cff;
+  --pink: #f778ba;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html{font-size:16px}
+body{background:var(--bg);color:var(--text);font-family:'Space Mono',monospace;min-height:100vh}
+
+.container{max-width:720px;margin:0 auto;padding:0 20px}
+
+.header{padding:48px 0 24px;border-bottom:1px solid var(--border);margin-bottom:28px;opacity:0;animation:fadeIn 0.8s ease 0.2s forwards}
+.header h1{font-family:'Sora',sans-serif;font-weight:800;font-size:2.4rem;color:var(--ink);letter-spacing:-0.03em}
+.header h1 span{color:var(--accent)}
+.header-sub{font-size:0.6rem;color:var(--text-dim);letter-spacing:0.2em;text-transform:uppercase;margin-top:6px}
+
+.model-bar{background:var(--surface);border:1px solid var(--border);padding:10px 14px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;font-size:0.6rem;opacity:0;animation:fadeIn 0.6s ease 0.3s forwards}
+.dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.dot.off{background:var(--text-faint)}.dot.loading{background:var(--orange);animation:pulse 1s infinite}.dot.on{background:var(--green)}
+.model-btn{padding:5px 14px;border:1px solid var(--border);background:transparent;color:var(--text-dim);font-family:inherit;font-size:0.55rem;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer}
+.model-btn:hover{border-color:var(--accent);color:var(--accent)}
+.model-btn:disabled{opacity:0.3;cursor:default}
+.progress-bar{height:2px;background:var(--border);margin-top:6px;display:none}.progress-fill{height:100%;background:var(--accent);width:0%;transition:width 0.3s}
+
+.editor{opacity:0;animation:fadeIn 0.6s ease 0.4s forwards}
+.editor textarea{width:100%;min-height:160px;background:var(--surface);border:1px solid var(--border);color:var(--ink);font-family:'Space Mono',monospace;font-size:0.8rem;line-height:1.8;padding:16px;resize:vertical;outline:none}
+.editor textarea:focus{border-color:var(--accent)}
+.editor textarea::placeholder{color:var(--text-faint)}
+.meta{display:flex;justify-content:space-between;padding:6px 0;font-size:0.5rem;color:var(--text-faint)}
+
+.actions{display:flex;gap:6px;padding:6px 0 28px}
+.act{padding:8px 20px;border:1px solid var(--border);background:transparent;color:var(--text-dim);font-family:inherit;font-size:0.55rem;letter-spacing:0.12em;text-transform:uppercase;cursor:pointer;transition:all 0.2s}
+.act:hover{border-color:var(--accent);color:var(--accent)}
+.act.primary{background:var(--accent);color:var(--bg);border-color:var(--accent);font-family:'Sora',sans-serif;font-weight:600}
+.act.primary:hover{background:#79c0ff}
+.act:disabled{opacity:0.3;cursor:default}
+
+.results{padding-bottom:40px}
+.card{border:1px solid var(--border);margin-bottom:12px;background:var(--surface);animation:revealUp 0.5s ease forwards}
+.card-head{padding:8px 14px;border-bottom:1px solid var(--border);font-size:0.5rem;letter-spacing:0.3em;text-transform:uppercase;color:var(--text-faint);display:flex;justify-content:space-between;align-items:center}
+.card-body{padding:14px}
+
+/* Tone bars */
+.tone-bars{display:flex;flex-direction:column;gap:6px}
+.tone-row{display:grid;grid-template-columns:90px 1fr 40px;gap:8px;align-items:center;font-size:0.55rem}
+.tone-label{color:var(--text-dim);text-transform:uppercase;letter-spacing:0.1em;font-size:0.5rem}
+.tone-bar-bg{height:8px;background:var(--bg);border-radius:1px;overflow:hidden}
+.tone-bar-fill{height:100%;border-radius:1px;transition:width 0.6s ease}
+.tone-pct{color:var(--text-dim);text-align:right;font-size:0.5rem}
+
+/* Metrics grid */
+.metrics-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border)}
+.metric{background:var(--surface);padding:12px;text-align:center}
+.metric-val{font-family:'Sora',sans-serif;font-weight:800;font-size:1.2rem;color:var(--accent)}
+.metric-val.green{color:var(--green)}.metric-val.orange{color:var(--orange)}.metric-val.red{color:var(--red)}.metric-val.purple{color:var(--purple)}
+.metric-label{font-size:0.4rem;letter-spacing:0.2em;color:var(--text-faint);text-transform:uppercase;margin-top:4px}
+
+/* AI response */
+.ai-box{background:var(--bg);border:1px solid var(--border);padding:14px;font-family:'Sora',sans-serif;font-size:0.8rem;font-weight:300;line-height:1.8;color:var(--text);white-space:pre-wrap}
+.ai-box.streaming{border-color:var(--accent)}
+
+.footer{text-align:center;padding:32px 0;border-top:1px solid var(--border);font-size:0.4rem;color:var(--text-faint);letter-spacing:0.25em;text-transform:uppercase}
+.footer a{color:var(--accent);text-decoration:none}
+
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes revealUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+@media(max-width:600px){.metrics-grid{grid-template-columns:repeat(2,1fr)}.header h1{font-size:1.8rem}}
+</style>
+</head>
+<body>
+<div class="container">
+
+<header class="header">
+  <h1>Tone<span>Smith</span></h1>
+  <div class="header-sub">Writing Tone & Style Analyzer · ToneEngine + WebLLM · Free · Open Source</div>
+</header>
+
+<div class="model-bar">
+  <div><span class="dot off" id="dot"></span><span id="modelText">Local AI not loaded</span>
+    <div class="progress-bar" id="pBar"><div class="progress-fill" id="pFill"></div></div>
+  </div>
+  <div style="display:flex;gap:6px">
+    <select id="modelSelect" style="padding:3px 6px;border:1px solid var(--border);background:var(--surface);font-family:inherit;font-size:0.5rem;color:var(--text-dim);outline:none">
+      <option value="Llama-3.2-1B-Instruct-q4f16_1-MLC">Llama 3.2 1B</option>
+      <option value="Llama-3.2-3B-Instruct-q4f16_1-MLC">Llama 3.2 3B</option>
+    </select>
+    <button class="model-btn" id="btnLoad" onclick="loadModel()">Load</button>
+  </div>
+</div>
+
+<section class="editor">
+  <textarea id="input" placeholder="Paste your writing here. ToneEngine runs locally — nothing leaves your browser."></textarea>
+  <div class="meta"><span id="wc">0 words</span><span>Local analysis · no data sent anywhere</span></div>
+</section>
+
+<div class="actions">
+  <button class="act primary" onclick="analyse()">Analyse</button>
+  <button class="act" id="btnAI" onclick="aiRewrite()" disabled>AI Suggestions</button>
+  <button class="act" onclick="document.getElementById('input').value='';document.getElementById('input').dispatchEvent(new Event('input'))">Clear</button>
+</div>
+
+<section class="results" id="results"></section>
+
+<footer class="footer">
+  ToneEngine · MIT · Zero Dependencies · <a href="https://ai-nativesolutions.com">ai-nativesolutions.com</a> · φ·κ=1 · ◊<br>
+  Depth analysis: <a href="https://ai-nativesolutions.com">ShadowEngine API</a> · <a href="https://ai-nativesolutions.com">FreudEngine</a>
+</footer>
+</div>
+
+<script>
+// ═══ TONE ENGINE (minified embed) ═══
+const ToneEngine=(()=>{const V="1.0.0";const TONES={formal:{label:"Formal",markers:["therefore","furthermore","consequently","nevertheless","accordingly","henceforth","notwithstanding","whereas","hereby","pursuant","aforementioned","herein","whereby","shall","it is important to note","with regard to","in accordance with","pertaining to","please be advised","kindly note"]},casual:{label:"Casual",markers:["gonna","wanna","kinda","sorta","gotta","dunno","yeah","yep","nope","cool","awesome","stuff","guys","hey","btw","tbh","imo","lol","haha","omg","literally","basically","honestly","actually","pretty much","not gonna lie","here's the thing","you know what I mean","let's be real","long story short","for real"]},technical:{label:"Technical",markers:["implementation","architecture","algorithm","parameter","configuration","infrastructure","deployment","integration","optimization","iteration","scalability","throughput","latency","bandwidth","middleware","endpoint","payload","schema","query","runtime","framework","abstraction","asynchronous","synchronous","concurrent","deterministic","idempotent","deprecated","refactor","specification","protocol","interface","module","dependency"]},persuasive:{label:"Persuasive",markers:["imagine","discover","transform","unlock","revolutionize","proven","guaranteed","exclusive","limited","don't miss","act now","before it's too late","what if","you deserve","finally","breakthrough","game-changing","life-changing","must-have","here's why","the truth is","studies show","results","success","achieve","opportunity","stop wasting","boost","maximize","skyrocket"]},empathetic:{label:"Empathetic",markers:["I understand","I hear you","that makes sense","it's okay","you're not alone","many people feel","it's completely normal","take your time","no pressure","whenever you're ready","I appreciate","thank you for sharing","that must be","I'm here","it's valid","it's understandable","be gentle with yourself","safe space","support"]},authoritative:{label:"Authoritative",markers:["the fact is","the reality is","make no mistake","without question","clearly","undeniably","it is essential","you must","you need to","the answer is","the solution is","here's what works","in my experience","the data shows","the best approach","the right way","period","non-negotiable","critical","imperative","we will","we must","excellence"]},witty:{label:"Witty",markers:["spoiler alert","plot twist","fun fact","surprise surprise","who knew","imagine that","groundbreaking","mind-blowing","newsflash","hot take","unpopular opinion","not to be dramatic but","asking for a friend","allegedly","apparently","you're welcome"]},narrative:{label:"Narrative",markers:["once upon","there was a","the day","that morning","it began","the moment","she said","he said","suddenly","then came","what happened next","picture this","let me tell you","here's the story","it all started","and that's when","the turning point","in the end"]},urgent:{label:"Urgent",markers:["now","immediately","asap","urgent","critical","emergency","deadline","time-sensitive","don't wait","act fast","hurry","last chance","final","right now","priority","action required","alert","warning","response needed"]},academic:{label:"Academic",markers:["according to","the literature suggests","research indicates","studies have shown","evidence suggests","it can be argued","the findings demonstrate","methodology","statistical significance","correlation","causation","peer-reviewed","further research","limitations include","sample size","et al","notably","arguably","ostensibly"]},minimalist:{label:"Minimalist",markers:[],detect:"structural"},lyrical:{label:"Lyrical",markers:["like a","as if","as though","reminds me of","whisper","echo","dance","bloom","unfold","shimmer","glow","shadow","pulse","breath","wave","thread","weave","tapestry","melody","rhythm","silence between","the weight of","the shape of","beneath the","dissolving","emerging","transforming"]}};
+function m(t,mk){const l=t.toLowerCase();let c=0;const h=[];for(const x of mk){if(l.includes(x)){c++;h.push(x)}}return{count:c,hits:h}}
+function analyseTone(text){if(!text||!text.trim())return{error:1};const l=text.toLowerCase(),w=text.split(/\s+/).filter(Boolean),wc=w.length||1,ss=text.split(/[.!?]+/).filter(s=>s.trim().length>0),sc=ss.length||1;const scores={};for(const[k,v]of Object.entries(TONES)){if(v.detect==="structural")continue;const{count:c,hits:h}=m(text,v.markers);scores[k]={count:c,density:Math.round(c/wc*1000)/10,hits:[...new Set(h)]}}const asl=wc/sc,awl=w.reduce((s,x)=>s+x.length,0)/wc;const fillers=["very","really","quite","rather","somewhat","basically","actually","literally","just","simply"];let fc=0;for(const f of fillers)if(l.includes(f))fc++;let ms=0;if(asl<8)ms+=4;else if(asl<12)ms+=2;if(fc===0)ms+=2;scores.minimalist={count:ms,density:Math.round(ms*1.5*10)/10,hits:asl<8?["short sentences"]:[]};const sorted=Object.entries(scores).sort((a,b)=>b[1].density-a[1].density);const dom=sorted[0][0];const tot=sorted.reduce((s,[,v])=>s+v.density,0)||1;const prop={};for(const[k,v]of Object.entries(scores))prop[k]=Math.round(v.density/tot*100);const top3=sorted.slice(0,3).filter(([,v])=>v.density>0).map(([k,v])=>({tone:k,label:TONES[k].label,pct:prop[k]}));return{dominant:{tone:dom,label:TONES[dom].label,confidence:Math.round(sorted[0][1].density/tot*100)/100},topTones:top3,proportions:prop,scores,wordCount:wc,sentenceCount:sc}}
+function analyseStyle(text){if(!text||!text.trim())return{error:1};const w=text.split(/\s+/).filter(Boolean),wc=w.length||1,ch=text.replace(/\s/g,"").length,ss=text.split(/[.!?]+/).filter(s=>s.trim().length>0),sc=ss.length||1;const awl=Math.round(ch/wc*10)/10,asl=Math.round(wc/sc*10)/10;const l=text.toLowerCase();const cw=l.replace(/[^\w\s]/g,"").split(/\s+/).filter(x=>x.length>0);const uw=new Set(cw);const vr=Math.round(uw.size/cw.length*100)/100;const ct=(text.match(/\w+'\w+/g)||[]).length;const pp=/\b(was|were|been|being|is|are|am)\s+\w+ed\b/gi;const pc=(text.match(pp)||[]).length;const fp=(l.match(/\b(I|me|my|mine|myself|we|us|our|ours|ourselves)\b/gi)||[]).length;const sp=(l.match(/\b(you|your|yours|yourself)\b/gi)||[]).length;const tp=(l.match(/\b(he|she|they|him|her|them|his|hers|their|it|its)\b/gi)||[]).length;const fpr=Math.round(fp/wc*1000)/10,spr=Math.round(sp/wc*1000)/10,tpr=Math.round(tp/wc*1000)/10;let dp="neutral";if(fpr>spr&&fpr>tpr)dp="first";else if(spr>fpr&&spr>tpr)dp="second";else if(tpr>fpr&&tpr>spr)dp="third";return{words:wc,sentences:sc,avgWordLen:awl,avgSentLen:asl,vocabRichness:vr,vocabLevel:vr>0.7?"diverse":vr>0.5?"moderate":"repetitive",contractions:ct,passiveCount:pc,passiveLevel:pc/sc>0.3?"heavy":pc/sc>0.1?"moderate":"minimal",person:dp,questions:(text.match(/\?/g)||[]).length,exclamations:(text.match(/!/g)||[]).length}}
+function analyseReadability(text){if(!text||!text.trim())return{error:1};const w=text.split(/\s+/).filter(Boolean),wc=w.length||1,ss=text.split(/[.!?]+/).filter(s=>s.trim().length>0),sc=ss.length||1;function sy(x){x=x.toLowerCase().replace(/[^a-z]/g,"");if(x.length<=3)return 1;x=x.replace(/(?:[^laeiouy]es|ed|[^laeiouy]e)$/,"");x=x.replace(/^y/,"");const m=x.match(/[aeiouy]{1,2}/g);return m?m.length:1}const syl=w.reduce((s,x)=>s+sy(x),0);const fl=Math.round(206.835-1.015*(wc/sc)-84.6*(syl/wc));const gl=Math.round((0.39*(wc/sc)+11.8*(syl/wc)-15.59)*10)/10;let lv,au;if(fl>=90){lv="Very Easy";au="Casual reader"}else if(fl>=70){lv="Easy";au="General audience"}else if(fl>=50){lv="Standard";au="College level"}else if(fl>=30){lv="Difficult";au="Graduate level"}else{lv="Very Difficult";au="Professional"}return{flesch:Math.max(0,Math.min(100,fl)),grade:Math.max(0,gl),level:lv,audience:au,readingTime:Math.round(wc/238*10)/10}}
+function analyse(text){return{tone:analyseTone(text),style:analyseStyle(text),readability:analyseReadability(text)}}
+return{version:V,analyse,analyseTone,analyseStyle,analyseReadability,TONES}})();
+</script>
+
+<script type="module">
+import * as webllm from "https://esm.run/@mlc-ai/web-llm";
+let engine=null,modelLoaded=false;
+const ta=document.getElementById("input");
+ta.addEventListener("input",()=>{const wc=ta.value.trim().split(/\s+/).filter(Boolean).length;document.getElementById("wc").textContent=wc+" word"+(wc!==1?"s":"")});
+
+const toneColors={formal:"#58a6ff",casual:"#3fb950",technical:"#bc8cff",persuasive:"#f78166",empathetic:"#f778ba",authoritative:"#d29922",witty:"#3fb950",narrative:"#58a6ff",urgent:"#f85149",academic:"#bc8cff",minimalist:"#6e7681",lyrical:"#f778ba"};
+
+window.loadModel=async function(){const id=document.getElementById("modelSelect").value;const d=document.getElementById("dot"),t=document.getElementById("modelText"),b=document.getElementById("pBar"),f=document.getElementById("pFill"),btn=document.getElementById("btnLoad");d.className="dot loading";t.textContent="Downloading...";b.style.display="block";btn.disabled=true;try{engine=await webllm.CreateMLCEngine(id,{initProgressCallback:p=>{f.style.width=Math.round(p.progress*100)+"%";t.textContent=p.text||"Loading..."}});d.className="dot on";t.textContent=id.split("-").slice(0,3).join(" ")+" ready";b.style.display="none";modelLoaded=true;document.getElementById("btnAI").disabled=false}catch(e){d.className="dot off";t.textContent="Failed: "+e.message;b.style.display="none";btn.disabled=false}};
+
+window.analyse=function(){const text=ta.value.trim();if(!text)return;const r=ToneEngine.analyse(text);if(r.tone.error)return;renderResults(r)};
+
+window.aiRewrite=async function(){const text=ta.value.trim();if(!text||!modelLoaded)return;const r=ToneEngine.analyse(text);if(r.tone.error)return;renderResults(r);const area=document.getElementById("results");const card=document.createElement("div");card.className="card";card.innerHTML='<div class="card-head"><span>AI Suggestions</span><span style="color:var(--accent)">local model</span></div><div class="card-body"><div class="ai-box streaming" id="aiOut">Generating...</div></div>';area.appendChild(card);const out=document.getElementById("aiOut");try{const prompt=`Analyze this writing and provide 3 specific suggestions to improve tone, clarity, and impact. Current analysis: Dominant tone is ${r.tone.dominant.label}. Reading level: grade ${r.readability.grade}. Average sentence length: ${r.style.avgSentLen} words. Voice: ${r.style.person} person. Vocabulary: ${r.style.vocabLevel}. Passive voice: ${r.style.passiveLevel}.\n\nText:\n"${text.slice(0,800)}"\n\nGive 3 numbered suggestions. Be specific and concise.`;const stream=await engine.chat.completions.create({messages:[{role:"system",content:"You are a writing coach. Give specific, actionable feedback on tone and style. Be direct and concise."},{role:"user",content:prompt}],stream:true,temperature:0.7,max_tokens:400});let o="";for await(const chunk of stream){o+=chunk.choices[0]?.delta?.content||"";out.textContent=o}out.classList.remove("streaming")}catch(e){out.textContent="Error: "+e.message;out.classList.remove("streaming")}};
+
+function renderResults(r){const area=document.getElementById("results");area.innerHTML="";const t=r.tone,s=r.style,rd=r.readability;
+
+// Tone bars
+let c1='<div class="card"><div class="card-head"><span>Tone Analysis</span><span style="color:var(--accent)">'+t.dominant.label+" "+Math.round(t.dominant.confidence*100)+'%</span></div><div class="card-body"><div class="tone-bars">';
+const sorted=Object.entries(t.proportions).sort((a,b)=>b[1]-a[1]).filter(([,v])=>v>0);
+for(const[k,v]of sorted){c1+=`<div class="tone-row"><span class="tone-label">${ToneEngine.TONES[k]?.label||k}</span><div class="tone-bar-bg"><div class="tone-bar-fill" style="width:${v}%;background:${toneColors[k]||'var(--accent)'}"></div></div><span class="tone-pct">${v}%</span></div>`}
+c1+='</div></div></div>';area.innerHTML+=c1;
+
+// Metrics
+let c2=`<div class="card"><div class="card-head"><span>Style & Readability</span></div><div class="card-body" style="padding:0"><div class="metrics-grid">
+<div class="metric"><div class="metric-val">${rd.flesch}</div><div class="metric-label">Flesch Score</div></div>
+<div class="metric"><div class="metric-val purple">${rd.grade}</div><div class="metric-label">Grade Level</div></div>
+<div class="metric"><div class="metric-val green">${rd.level}</div><div class="metric-label">Readability</div></div>
+<div class="metric"><div class="metric-val">${s.avgSentLen}</div><div class="metric-label">Avg Sentence</div></div>
+<div class="metric"><div class="metric-val ${s.vocabLevel==='diverse'?'green':s.vocabLevel==='repetitive'?'orange':''}">${s.vocabRichness}</div><div class="metric-label">Vocab Richness</div></div>
+<div class="metric"><div class="metric-val">${s.person}</div><div class="metric-label">Voice Person</div></div>
+<div class="metric"><div class="metric-val ${s.passiveLevel==='heavy'?'red':''}">${s.passiveLevel}</div><div class="metric-label">Passive Voice</div></div>
+<div class="metric"><div class="metric-val">${s.contractions}</div><div class="metric-label">Contractions</div></div>
+<div class="metric"><div class="metric-val">${rd.readingTime}m</div><div class="metric-label">Read Time</div></div>
+</div></div></div>`;area.innerHTML+=c2}
+</script>
+</body></html>
